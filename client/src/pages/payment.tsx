@@ -10,9 +10,11 @@ export default function Payment() {
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [isSwiping, setIsSwiping] = useState(false);
+  const [photoType, setPhotoType] = useState<"bw" | "color">("bw");
 
   const handleSwipe = () => {
     if (!email) return; // Simple validation
+    localStorage.setItem("photo_type", photoType);
     setIsSwiping(true);
     setTimeout(() => {
       setLocation("/booth");
@@ -41,7 +43,33 @@ export default function Payment() {
               />
             </div>
 
-            <div className="pt-8">
+            <div className="space-y-2">
+              <Label className="font-mono text-xs uppercase text-muted-foreground">Photo Style</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => setPhotoType("bw")}
+                  className={`h-12 border-2 font-display uppercase tracking-wider transition-all ${
+                    photoType === "bw" 
+                      ? "bg-white text-black border-white" 
+                      : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
+                  }`}
+                >
+                  B&W Film
+                </button>
+                <button
+                  onClick={() => setPhotoType("color")}
+                  className={`h-12 border-2 font-display uppercase tracking-wider transition-all ${
+                    photoType === "color" 
+                      ? "bg-accent text-black border-accent" 
+                      : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
+                  }`}
+                >
+                  Color
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-4">
               <div className="relative h-48 bg-zinc-800 rounded-lg border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center overflow-hidden group cursor-pointer" onClick={handleSwipe}>
                 
                 {isSwiping ? (

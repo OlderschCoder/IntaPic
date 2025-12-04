@@ -53,7 +53,7 @@ export default function Result() {
               <div className="space-y-2">
                 {photos.map((src, i) => (
                   <div key={i} className="aspect-[4/3] bg-zinc-200 border border-zinc-300 p-1">
-                    <img src={src} alt={`Pose ${i+1}`} className="w-full h-full object-cover grayscale contrast-125" />
+                    <img src={src} alt={`Pose ${i+1}`} className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>

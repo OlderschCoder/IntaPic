@@ -63,8 +63,16 @@ export default function Booth() {
         canvas.height = videoRef.current.videoHeight;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-            // Add B&W Filter
-            ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
+            // Apply Photo Filter
+            const type = localStorage.getItem("photo_type") || "bw";
+            
+            if (type === "bw") {
+              ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
+            } else {
+              // Vintage Color Look
+              ctx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
+            }
+            
             ctx.drawImage(videoRef.current, 0, 0);
             const photoData = canvas.toDataURL("image/jpeg");
             setPhotos(prev => [...prev, photoData]);
