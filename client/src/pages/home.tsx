@@ -1,7 +1,8 @@
 import { Link } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
-import { Camera, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import logo from "@assets/image_1764891451094.png";
 
 export default function Home() {
   return (
@@ -12,15 +13,17 @@ export default function Home() {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="space-y-4"
+          className="space-y-6 flex flex-col items-center"
         >
-          <div className="inline-block p-6 rounded-full border-4 border-accent/50 bg-accent/10 mb-4 box-glow">
-            <Camera className="w-12 h-12 text-accent" />
+          <div className="relative w-64 md:w-80 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
+             <img 
+               src={logo} 
+               alt="Billy's Ayr Lanes" 
+               className="w-full h-auto drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" 
+             />
           </div>
-          <h1 className="text-5xl md:text-6xl font-display text-foreground text-glow uppercase leading-none">
-            Photo<br/>Booth
-          </h1>
-          <p className="font-mono text-sm text-muted-foreground tracking-widest">
+          
+          <p className="font-mono text-sm text-muted-foreground tracking-widest mt-8">
             4 SPONTANEOUS POSES • B&W FILM
           </p>
         </motion.div>
