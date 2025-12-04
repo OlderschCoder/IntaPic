@@ -1,29 +1,36 @@
 import { Link } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { Camera, ChevronRight } from "lucide-react";
 import logo from "@assets/image_1764891451094.png";
 
 export default function Home() {
   return (
     <BoothShell>
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-12 bg-zinc-900/50">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 bg-zinc-900/50">
         
+        {/* Ownership Tag */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute top-6 opacity-80"
+        >
+           <img src={logo} alt="Billy's Ayr Lanes" className="w-24 h-auto drop-shadow-md grayscale-[0.3]" />
+        </motion.div>
+
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="space-y-6 flex flex-col items-center"
+          className="space-y-4 mt-12"
         >
-          <div className="relative w-64 md:w-80 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
-             <img 
-               src={logo} 
-               alt="Billy's Ayr Lanes" 
-               className="w-full h-auto drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" 
-             />
+          <div className="inline-block p-6 rounded-full border-4 border-accent/50 bg-accent/10 mb-4 box-glow">
+            <Camera className="w-12 h-12 text-accent" />
           </div>
-          
-          <p className="font-mono text-sm text-muted-foreground tracking-widest mt-8">
+          <h1 className="text-5xl md:text-6xl font-display text-foreground text-glow uppercase leading-none">
+            Photo<br/>Booth
+          </h1>
+          <p className="font-mono text-sm text-muted-foreground tracking-widest">
             4 SPONTANEOUS POSES • B&W FILM
           </p>
         </motion.div>
