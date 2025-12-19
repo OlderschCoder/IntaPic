@@ -1,8 +1,8 @@
 import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { Check, Download, RotateCcw, Mail } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Check, Download, RotateCcw, Mail, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Result() {
@@ -11,6 +11,9 @@ export default function Result() {
   const [email, setEmail] = useState("");
   const [isPrinting, setIsPrinting] = useState(true);
   const [showSaveButton, setShowSaveButton] = useState(true);
+  const [emailStatus, setEmailStatus] = useState<"pending" | "sending" | "sent" | "error">("pending");
+  const [sessionId] = useState(() => Math.random().toString(36).substr(2, 8).toUpperCase());
+  const emailSentRef = useRef(false);
 
   useEffect(() => {
     const storedPhotos = localStorage.getItem("booth_photos");
@@ -32,14 +35,18 @@ export default function Result() {
     setTimeout(() => setIsPrinting(false), 3000);
   }, []);
 
-  const handleRetake = () => {
-    setLocation("/");
-  };
+  // Auto-send email when photos are ready
+  useEffect(() => {
+    if (!isPrinting && photos.length > 0 && email && !emailSentRef.current) {
+      emailSentRef.current = true;
+      sendEmailWithPhotos();
+    }
+  }, [isPrinting, photos, email]);
 
-  const handleDownload = async () => {
+  const generatePhotoStrip = async (): Promise<string> => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) throw new Error("Canvas not supported");
 
     // Setup canvas (strip dimensions)
     const stripWidth = 300;
@@ -47,7 +54,7 @@ export default function Result() {
     const padding = 20;
     const headerHeight = 100;
     const footerHeight = 60;
-    const totalHeight = headerHeight + (photoHeight * 4) + (padding * 5) + footerHeight;
+    const totalHeight = headerHeight + (photoHeight * photos.length) + (padding * (photos.length + 1)) + footerHeight;
 
     canvas.width = stripWidth;
     canvas.height = totalHeight;
@@ -59,7 +66,7 @@ export default function Result() {
     // Draw Header
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
-    ctx.font = 'bold 40px Oswald';
+    ctx.font = 'bold 40px sans-serif';
     ctx.fillText('PHOTO', stripWidth / 2, 50);
     ctx.fillText('MATIC', stripWidth / 2, 90);
 
@@ -83,19 +90,56 @@ export default function Result() {
 
     // Draw Footer
     ctx.fillStyle = '#000000';
-    ctx.font = '12px Courier Prime';
-    ctx.fillText(`ID: #${Math.random().toString(36).substr(2, 6).toUpperCase()}`, stripWidth / 2, totalHeight - 30);
+    ctx.font = '12px monospace';
+    ctx.fillText(`ID: #${sessionId}`, stripWidth / 2, totalHeight - 30);
     ctx.fillText(new Date().toLocaleDateString(), stripWidth / 2, totalHeight - 15);
 
-    // Download
+    return canvas.toDataURL('image/jpeg', 0.9);
+  };
+
+  const sendEmailWithPhotos = async () => {
+    try {
+      setEmailStatus("sending");
+      
+      const photoStrip = await generatePhotoStrip();
+      
+      const response = await fetch("/api/send-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          photoStrip,
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send email");
+      }
+
+      setEmailStatus("sent");
+    } catch (err) {
+      console.error("Email error:", err);
+      setEmailStatus("error");
+    }
+  };
+
+  const handleRetake = () => {
+    setLocation("/");
+  };
+
+  const handleDownload = async () => {
+    const photoStrip = await generatePhotoStrip();
     const link = document.createElement('a');
-    link.download = `photobooth-${Date.now()}.jpg`;
-    link.href = canvas.toDataURL('image/jpeg');
+    link.download = `photobooth-${sessionId}.jpg`;
+    link.href = photoStrip;
     link.click();
   };
 
-  const handleEmail = () => {
-    window.location.href = `mailto:${email}?subject=Your Photo Booth Strip&body=Here are your photos from Billy's Ayr Lanes!`;
+  const handleResendEmail = () => {
+    emailSentRef.current = false;
+    setEmailStatus("pending");
+    sendEmailWithPhotos();
   };
 
   return (
@@ -115,12 +159,12 @@ export default function Result() {
               animate={{ y: "0%" }}
               transition={{ type: "spring", damping: 20, stiffness: 100 }}
               className="relative bg-white p-2 pb-8 shadow-2xl rotate-1 max-h-[500px] overflow-y-auto no-scrollbar"
-              style={{ width: "140px" }} // Approx strip width
+              style={{ width: "140px" }}
             >
               {/* Strip Header */}
               <div className="text-center py-2 border-b-2 border-black mb-2">
                 <h3 className="font-display text-black text-lg leading-none">PHOTO<br/>MATIC</h3>
-                <p className="text-[8px] font-mono text-black">DEC 04 2025</p>
+                <p className="text-[8px] font-mono text-black">{new Date().toLocaleDateString()}</p>
               </div>
 
               {/* Photos */}
@@ -134,7 +178,7 @@ export default function Result() {
 
               {/* Strip Footer */}
               <div className="mt-4 text-center">
-                 <p className="font-mono text-[8px] text-black/50">ID: #8X92-A</p>
+                 <p className="font-mono text-[8px] text-black/50">ID: #{sessionId}</p>
               </div>
             </motion.div>
           )}
@@ -146,22 +190,52 @@ export default function Result() {
                 animate={{ opacity: 1, y: 0 }}
                 className="w-full max-w-sm space-y-4 mt-6"
             >
-                <div className="bg-green-500/10 border border-green-500/50 p-4 rounded flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-green-500 p-1 rounded-full text-black">
-                            <Check className="w-4 h-4" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-bold text-green-500">SENT TO EMAIL</p>
-                            <p className="text-[10px] text-green-400/80 uppercase">{email || "UNKNOWN EMAIL"}</p>
-                        </div>
+                {/* Email Status */}
+                {emailStatus === "sending" && (
+                  <div className="bg-blue-500/10 border border-blue-500/50 p-4 rounded flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    <div>
+                      <p className="text-sm font-bold text-blue-500">SENDING EMAIL...</p>
+                      <p className="text-[10px] text-blue-400/80 uppercase">{email}</p>
                     </div>
-                    <Button size="sm" variant="ghost" className="h-8 text-green-500 hover:text-green-400 hover:bg-green-500/20" onClick={handleEmail}>
-                        <Mail className="w-4 h-4" />
-                    </Button>
-                </div>
+                  </div>
+                )}
 
-                <div className="grid grid-cols-2 gap-4">
+                {emailStatus === "sent" && (
+                  <div className="bg-green-500/10 border border-green-500/50 p-4 rounded flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-green-500 p-1 rounded-full text-black">
+                        <Check className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-green-500">SENT TO EMAIL</p>
+                        <p className="text-[10px] text-green-400/80 uppercase">{email}</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="ghost" className="h-8 text-green-500 hover:text-green-400 hover:bg-green-500/20" onClick={handleResendEmail}>
+                      <Mail className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {emailStatus === "error" && (
+                  <div className="bg-red-500/10 border border-red-500/50 p-4 rounded flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-red-500 p-1 rounded-full text-white">
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-red-500">EMAIL FAILED</p>
+                        <p className="text-[10px] text-red-400/80">Tap to retry or save locally</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="ghost" className="h-8 text-red-500 hover:text-red-400 hover:bg-red-500/20" onClick={handleResendEmail}>
+                      <Mail className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                <div className={`grid gap-4 ${showSaveButton ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     <Button variant="outline" className="h-12 border-zinc-700 hover:bg-zinc-800 text-zinc-300" onClick={handleRetake}>
                         <RotateCcw className="mr-2 w-4 h-4" />
                         NEW SESSION
