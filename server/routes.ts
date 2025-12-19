@@ -23,7 +23,7 @@ export async function registerRoutes(
       const photoBuffer = Buffer.from(base64Data, "base64");
 
       const { data, error } = await resend.emails.send({
-        from: "Billy's Photo Booth <onboarding@resend.dev>",
+        from: "Billy's Photo Booth <billys@classicpic.com>",
         to: email,
         subject: "Your Photo Strip from Billy's Ayr Lanes! 📸",
         html: `
