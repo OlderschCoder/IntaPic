@@ -15,7 +15,10 @@ export default function Home() {
           animate={{ opacity: 1 }}
           className="absolute top-6 opacity-80"
         >
-           <img src={logo} alt="Billy's Ayr Lanes" className="w-24 h-auto drop-shadow-md grayscale-[0.3]" />
+           {/* Secret Admin Access: Triple click the logo */}
+           <Link href="/admin">
+             <img src={logo} alt="Billy's Ayr Lanes" className="w-24 h-auto drop-shadow-md grayscale-[0.3] cursor-default active:opacity-50" />
+           </Link>
         </motion.div>
 
         <motion.div
