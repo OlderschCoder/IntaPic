@@ -30,13 +30,13 @@ A vintage-style photo booth application for Billy's Ayr Lanes bowling alley. Run
 - Admin settings now persist in localStorage
 - USB save button controlled by admin toggle
 
-## Future Integration Notes
-**Email Integration Dismissed:** User declined Resend/SendGrid backend integration. Current implementation uses device's native email client which is ideal for kiosk deployment - simpler, more reliable, works offline, no API keys to manage.
-
-If backend email integration is needed in future, consider:
-- Resend connector (for transactional emails)
-- SendGrid connector (alternative)
-- Store API keys as secrets using request_env_var tool
+## Email Integration
+**Resend Integration:** Configured and working!
+- **Sender:** billys@classicpic.com
+- **Domain:** classicpic.com (verified in Resend)
+- **API Key:** Stored in Replit Secrets as RESEND_API_KEY
+- **Endpoint:** POST /api/send-photos
+- **Features:** Auto-sends photo strip as JPG attachment after session completes
 
 ## User Preferences
 - Prefers frontend-only solutions when possible
