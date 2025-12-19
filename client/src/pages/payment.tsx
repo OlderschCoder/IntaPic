@@ -35,8 +35,10 @@ export default function Payment() {
     }
   }, []);
 
+  const canProceed = email || phone;
+
   const handleTap = () => {
-    if (!email) return;
+    if (!canProceed) return;
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
     localStorage.setItem("user_phone", phone);
@@ -47,7 +49,7 @@ export default function Payment() {
   };
 
   const handleConfirmPayment = () => {
-    if (!email) return;
+    if (!canProceed) return;
     setPaymentConfirmed(true);
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
@@ -63,12 +65,12 @@ export default function Payment() {
         <div className="flex-1 flex flex-col justify-center space-y-8">
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-display text-accent uppercase tracking-wider">Details</h2>
-            <p className="font-mono text-xs text-muted-foreground">ENTER EMAIL & TAP TO PAY</p>
+            <p className="font-mono text-xs text-muted-foreground">ENTER EMAIL OR PHONE TO RECEIVE PHOTOS</p>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="font-mono text-xs uppercase text-muted-foreground">Email Address</Label>
+              <Label htmlFor="email" className="font-mono text-xs uppercase text-muted-foreground">Email Address (optional)</Label>
               <Input 
                 id="email" 
                 type="email" 
@@ -81,7 +83,7 @@ export default function Payment() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="font-mono text-xs uppercase text-muted-foreground">Phone Number (optional - for text)</Label>
+              <Label htmlFor="phone" className="font-mono text-xs uppercase text-muted-foreground">Phone Number (optional)</Label>
               <Input 
                 id="phone" 
                 type="tel" 
@@ -178,7 +180,7 @@ export default function Payment() {
                   ) : (
                     <Button 
                       onClick={handleConfirmPayment}
-                      disabled={!email}
+                      disabled={!canProceed}
                       className="w-full bg-accent text-black hover:bg-accent/90 font-display tracking-widest h-12"
                       data-testid="button-confirm-payment"
                     >
