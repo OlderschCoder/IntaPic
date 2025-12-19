@@ -20,7 +20,7 @@ export default function Admin() {
     }
     return {
       pricePerStrip: "5.00",
-      emailSender: "booth@billysayrlanes.com",
+      emailSender: "bojeunm@gmail.com",
       allowUsb: true, // Default to true so we can test save functionality
       kioskMode: true,
       autoPrint: true,

@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
-import { CreditCard, ArrowRight } from "lucide-react";
+import { Smartphone, Nfc, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,14 +12,14 @@ export default function Payment() {
   const [isSwiping, setIsSwiping] = useState(false);
   const [photoType, setPhotoType] = useState<"bw" | "color">("bw");
 
-  const handleSwipe = () => {
+  const handleTap = () => {
     if (!email) return; // Simple validation
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
     setIsSwiping(true);
     setTimeout(() => {
       setLocation("/booth");
-    }, 1500);
+    }, 2000);
   };
 
   return (
@@ -28,7 +28,7 @@ export default function Payment() {
         <div className="flex-1 flex flex-col justify-center space-y-8">
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-display text-accent uppercase tracking-wider">Details</h2>
-            <p className="font-mono text-xs text-muted-foreground">ENTER EMAIL & SWIPE CARD</p>
+            <p className="font-mono text-xs text-muted-foreground">ENTER EMAIL & TAP TO PAY</p>
           </div>
 
           <div className="space-y-4">
@@ -71,39 +71,48 @@ export default function Payment() {
             </div>
 
             <div className="pt-4">
-              <div className="relative h-48 bg-zinc-800 rounded-lg border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center overflow-hidden group cursor-pointer" onClick={handleSwipe}>
+              <div className="relative h-48 bg-zinc-800 rounded-lg border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center overflow-hidden group cursor-pointer" onClick={handleTap}>
                 
                 {isSwiping ? (
                   <motion.div 
-                    initial={{ x: -100, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    className="text-accent font-display text-2xl uppercase"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="text-accent font-display text-2xl uppercase flex flex-col items-center gap-2"
                   >
-                    Authorizing...
+                    <div className="w-12 h-12 rounded-full border-4 border-accent border-t-transparent animate-spin" />
+                    Processing...
                   </motion.div>
                 ) : (
                   <>
-                    <CreditCard className="w-16 h-16 text-zinc-500 mb-4 group-hover:text-white transition-colors" />
-                    <p className="font-mono text-xs text-zinc-400 group-hover:text-white transition-colors">TAP TO SWIPE CARD</p>
+                    <div className="relative">
+                      <Nfc className="w-20 h-20 text-zinc-500 mb-4 group-hover:text-white transition-colors animate-pulse" />
+                      <Smartphone className="w-12 h-12 text-zinc-600 absolute bottom-0 -right-4 bg-zinc-800 rounded-full p-1 border-2 border-zinc-800 group-hover:text-zinc-300 transition-colors" />
+                    </div>
+                    <p className="font-mono text-xs text-zinc-400 group-hover:text-white transition-colors uppercase tracking-widest">TAP CARD OR PHONE HERE</p>
                     <p className="font-mono text-[10px] text-zinc-600 mt-2">$5.00 CHARGE</p>
                   </>
                 )}
 
-                {/* Swipe Animation Line */}
-                <motion.div 
-                  className="absolute top-0 bottom-0 w-1 bg-accent/50"
-                  animate={isSwiping ? { left: ["0%", "100%"] } : { left: "-10%" }}
-                  transition={{ duration: 1, ease: "easeInOut" }}
-                />
+                {/* NFC Wave Animation */}
+                {!isSwiping && (
+                  <motion.div 
+                    className="absolute inset-0 border-4 border-accent/20 rounded-lg"
+                    animate={{ scale: [1, 1.05, 1], opacity: [0, 1, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                )}
               </div>
             </div>
           </div>
         </div>
 
         <div className="flex justify-between items-center pt-4 border-t border-zinc-800">
+           <div className="flex gap-2 items-center">
+             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+             <span className="text-[10px] font-mono text-zinc-500">NFC READER ACTIVE</span>
+           </div>
            <div className="flex gap-2">
-             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-             <span className="text-[10px] font-mono text-zinc-500">READER READY</span>
+             <span className="text-[10px] font-mono text-zinc-600">VISA • MC • AMEX • APPLE PAY</span>
            </div>
         </div>
       </div>
