@@ -2,18 +2,24 @@ import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Check, Download, RotateCcw } from "lucide-react";
+import { Check, Download, RotateCcw, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Result() {
   const [, setLocation] = useLocation();
   const [photos, setPhotos] = useState<string[]>([]);
+  const [email, setEmail] = useState("");
   const [isPrinting, setIsPrinting] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("booth_photos");
-    if (stored) {
-      setPhotos(JSON.parse(stored));
+    const storedPhotos = localStorage.getItem("booth_photos");
+    const storedEmail = localStorage.getItem("user_email");
+    
+    if (storedPhotos) {
+      setPhotos(JSON.parse(storedPhotos));
+    }
+    if (storedEmail) {
+      setEmail(storedEmail);
     }
     
     // Simulate printing time
@@ -22,6 +28,68 @@ export default function Result() {
 
   const handleRetake = () => {
     setLocation("/");
+  };
+
+  const handleDownload = async () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Setup canvas (strip dimensions)
+    const stripWidth = 300;
+    const photoHeight = 225; // 4:3 aspect ratio
+    const padding = 20;
+    const headerHeight = 100;
+    const footerHeight = 60;
+    const totalHeight = headerHeight + (photoHeight * 4) + (padding * 5) + footerHeight;
+
+    canvas.width = stripWidth;
+    canvas.height = totalHeight;
+
+    // Fill white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, stripWidth, totalHeight);
+
+    // Draw Header
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 40px Oswald';
+    ctx.fillText('PHOTO', stripWidth / 2, 50);
+    ctx.fillText('MATIC', stripWidth / 2, 90);
+
+    // Draw Photos
+    let currentY = headerHeight + padding;
+    
+    for (const src of photos) {
+      const img = new Image();
+      img.src = src;
+      await new Promise((resolve) => { img.onload = resolve; });
+      
+      // Draw photo border
+      ctx.fillStyle = '#e4e4e7'; // zinc-200
+      ctx.fillRect(padding - 2, currentY - 2, stripWidth - (padding * 2) + 4, photoHeight + 4);
+      
+      // Draw photo
+      ctx.drawImage(img, padding, currentY, stripWidth - (padding * 2), photoHeight);
+      
+      currentY += photoHeight + padding;
+    }
+
+    // Draw Footer
+    ctx.fillStyle = '#000000';
+    ctx.font = '12px Courier Prime';
+    ctx.fillText(`ID: #${Math.random().toString(36).substr(2, 6).toUpperCase()}`, stripWidth / 2, totalHeight - 30);
+    ctx.fillText(new Date().toLocaleDateString(), stripWidth / 2, totalHeight - 15);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = `photobooth-${Date.now()}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg');
+    link.click();
+  };
+
+  const handleEmail = () => {
+    window.location.href = `mailto:${email}?subject=Your Photo Booth Strip&body=Here are your photos from Billy's Ayr Lanes!`;
   };
 
   return (
@@ -72,14 +140,19 @@ export default function Result() {
                 animate={{ opacity: 1, y: 0 }}
                 className="w-full max-w-sm space-y-4 mt-6"
             >
-                <div className="bg-green-500/10 border border-green-500/50 p-4 rounded flex items-center gap-3">
-                    <div className="bg-green-500 p-1 rounded-full text-black">
-                        <Check className="w-4 h-4" />
+                <div className="bg-green-500/10 border border-green-500/50 p-4 rounded flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-green-500 p-1 rounded-full text-black">
+                            <Check className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-green-500">SENT TO EMAIL</p>
+                            <p className="text-[10px] text-green-400/80 uppercase">{email || "UNKNOWN EMAIL"}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-sm font-bold text-green-500">SENT TO EMAIL</p>
-                        <p className="text-[10px] text-green-400/80">CHECK YOUR INBOX</p>
-                    </div>
+                    <Button size="sm" variant="ghost" className="h-8 text-green-500 hover:text-green-400 hover:bg-green-500/20" onClick={handleEmail}>
+                        <Mail className="w-4 h-4" />
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -87,9 +160,9 @@ export default function Result() {
                         <RotateCcw className="mr-2 w-4 h-4" />
                         NEW SESSION
                     </Button>
-                    <Button className="h-12 bg-white text-black hover:bg-zinc-200 font-display tracking-wider">
+                    <Button className="h-12 bg-white text-black hover:bg-zinc-200 font-display tracking-wider" onClick={handleDownload}>
                         <Download className="mr-2 w-4 h-4" />
-                        SAVE
+                        SAVE STRIP
                     </Button>
                 </div>
             </motion.div>

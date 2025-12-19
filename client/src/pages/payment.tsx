@@ -15,6 +15,7 @@ export default function Payment() {
   const handleSwipe = () => {
     if (!email) return; // Simple validation
     localStorage.setItem("photo_type", photoType);
+    localStorage.setItem("user_email", email);
     setIsSwiping(true);
     setTimeout(() => {
       setLocation("/booth");
