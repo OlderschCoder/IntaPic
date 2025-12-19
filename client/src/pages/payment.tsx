@@ -11,6 +11,7 @@ import { QRCodeSVG } from "qrcode.react";
 export default function Payment() {
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [isSwiping, setIsSwiping] = useState(false);
   const [photoType, setPhotoType] = useState<"bw" | "color">("bw");
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
@@ -38,6 +39,7 @@ export default function Payment() {
     if (!email) return;
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
+    localStorage.setItem("user_phone", phone);
     setIsSwiping(true);
     setTimeout(() => {
       setLocation("/booth");
@@ -49,6 +51,7 @@ export default function Payment() {
     setPaymentConfirmed(true);
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
+    localStorage.setItem("user_phone", phone);
     setTimeout(() => {
       setLocation("/booth");
     }, 1500);
@@ -73,6 +76,20 @@ export default function Payment() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-black/50 border-zinc-700 font-mono text-lg h-12 focus:border-accent focus:ring-accent"
+                data-testid="input-email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="font-mono text-xs uppercase text-muted-foreground">Phone Number (optional - for text)</Label>
+              <Input 
+                id="phone" 
+                type="tel" 
+                placeholder="(555) 123-4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="bg-black/50 border-zinc-700 font-mono text-lg h-12 focus:border-accent focus:ring-accent"
+                data-testid="input-phone"
               />
             </div>
 

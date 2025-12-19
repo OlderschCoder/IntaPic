@@ -1,8 +1,21 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { Resend } from "resend";
+import twilio from "twilio";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Initialize Twilio only if credentials are valid
+let twilioClient: ReturnType<typeof twilio> | null = null;
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+if (accountSid?.startsWith("AC") && authToken) {
+  twilioClient = twilio(accountSid, authToken);
+  console.log("Twilio client initialized successfully");
+} else {
+  console.log("Twilio credentials not configured or invalid (Account SID must start with 'AC')");
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -65,6 +78,43 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Email send error:", err);
       return res.status(500).json({ error: "Failed to send email", details: err.message });
+    }
+  });
+
+  // Send photo strip via SMS (MMS with image)
+  app.post("/api/send-sms", async (req, res) => {
+    try {
+      const { phone, photoUrl, sessionId } = req.body;
+
+      if (!twilioClient) {
+        return res.status(503).json({ 
+          error: "SMS not configured", 
+          details: "Twilio credentials are not set up. Please configure TWILIO_ACCOUNT_SID (must start with 'AC'), TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER." 
+        });
+      }
+
+      if (!phone || !photoUrl) {
+        return res.status(400).json({ error: "Phone number and photo URL are required" });
+      }
+
+      // Format phone number (ensure it has country code)
+      let formattedPhone = phone.replace(/\D/g, "");
+      if (!formattedPhone.startsWith("1") && formattedPhone.length === 10) {
+        formattedPhone = "1" + formattedPhone;
+      }
+      formattedPhone = "+" + formattedPhone;
+
+      const message = await twilioClient.messages.create({
+        body: `Thanks for visiting Billy's Ayr Lanes Photo Booth! 📸 Your photo strip is attached. Come back soon!`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: formattedPhone,
+        mediaUrl: [photoUrl],
+      });
+
+      return res.json({ success: true, messageSid: message.sid });
+    } catch (err: any) {
+      console.error("SMS send error:", err);
+      return res.status(500).json({ error: "Failed to send SMS", details: err.message });
     }
   });
 

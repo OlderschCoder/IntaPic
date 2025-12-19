@@ -2,18 +2,22 @@ import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
-import { Check, Download, RotateCcw, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { Check, Download, RotateCcw, Mail, AlertCircle, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Result() {
   const [, setLocation] = useLocation();
   const [photos, setPhotos] = useState<string[]>([]);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [isPrinting, setIsPrinting] = useState(true);
   const [showSaveButton, setShowSaveButton] = useState(true);
   const [emailStatus, setEmailStatus] = useState<"pending" | "sending" | "sent" | "error">("pending");
+  const [smsStatus, setSmsStatus] = useState<"pending" | "sending" | "sent" | "error">("pending");
   const [sessionId] = useState(() => Math.random().toString(36).substr(2, 8).toUpperCase());
   const emailSentRef = useRef(false);
+  const smsSentRef = useRef(false);
+  const [photoStripUrl, setPhotoStripUrl] = useState<string>("");
 
   useEffect(() => {
     const storedPhotos = localStorage.getItem("booth_photos");
@@ -25,6 +29,10 @@ export default function Result() {
     }
     if (storedEmail) {
       setEmail(storedEmail);
+    }
+    const storedPhone = localStorage.getItem("user_phone");
+    if (storedPhone) {
+      setPhone(storedPhone);
     }
     if (settings) {
       const parsed = JSON.parse(settings);
@@ -42,6 +50,14 @@ export default function Result() {
       sendEmailWithPhotos();
     }
   }, [isPrinting, photos, email]);
+
+  // Auto-send SMS when photos are ready (if phone provided)
+  useEffect(() => {
+    if (!isPrinting && photos.length > 0 && phone && photoStripUrl && !smsSentRef.current) {
+      smsSentRef.current = true;
+      sendSmsWithPhotos();
+    }
+  }, [isPrinting, photos, phone, photoStripUrl]);
 
   const generatePhotoStrip = async (): Promise<string> => {
     const canvas = document.createElement('canvas');
@@ -122,6 +138,41 @@ export default function Result() {
       console.error("Email error:", err);
       setEmailStatus("error");
     }
+  };
+
+  const sendSmsWithPhotos = async () => {
+    try {
+      setSmsStatus("sending");
+      
+      // For SMS, we need a publicly accessible URL
+      // We'll upload the photo strip and get a URL back
+      const photoStrip = photoStripUrl || await generatePhotoStrip();
+      
+      const response = await fetch("/api/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          photoUrl: photoStrip, // This needs to be a public URL for Twilio MMS
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send SMS");
+      }
+
+      setSmsStatus("sent");
+    } catch (err) {
+      console.error("SMS error:", err);
+      setSmsStatus("error");
+    }
+  };
+
+  const handleResendSms = () => {
+    smsSentRef.current = false;
+    setSmsStatus("pending");
+    sendSmsWithPhotos();
   };
 
   const handleRetake = () => {
@@ -233,6 +284,55 @@ export default function Result() {
                       <Mail className="w-4 h-4" />
                     </Button>
                   </div>
+                )}
+
+                {/* SMS Status - only show if phone provided */}
+                {phone && (
+                  <>
+                    {smsStatus === "sending" && (
+                      <div className="bg-purple-500/10 border border-purple-500/50 p-4 rounded flex items-center gap-3">
+                        <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+                        <div>
+                          <p className="text-sm font-bold text-purple-500">SENDING TEXT...</p>
+                          <p className="text-[10px] text-purple-400/80 uppercase">{phone}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {smsStatus === "sent" && (
+                      <div className="bg-purple-500/10 border border-purple-500/50 p-4 rounded flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-purple-500 p-1 rounded-full text-white">
+                            <Check className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-purple-500">SENT TO PHONE</p>
+                            <p className="text-[10px] text-purple-400/80 uppercase">{phone}</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="ghost" className="h-8 text-purple-500 hover:text-purple-400 hover:bg-purple-500/20" onClick={handleResendSms}>
+                          <MessageSquare className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+
+                    {smsStatus === "error" && (
+                      <div className="bg-orange-500/10 border border-orange-500/50 p-4 rounded flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-orange-500 p-1 rounded-full text-white">
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-orange-500">TEXT FAILED</p>
+                            <p className="text-[10px] text-orange-400/80">Tap to retry</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="ghost" className="h-8 text-orange-500 hover:text-orange-400 hover:bg-orange-500/20" onClick={handleResendSms}>
+                          <MessageSquare className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <div className={`grid gap-4 ${showSaveButton ? 'grid-cols-2' : 'grid-cols-1'}`}>
