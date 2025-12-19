@@ -21,10 +21,12 @@ export default function Admin() {
     return {
       pricePerStrip: "5.00",
       emailSender: "bojeunm@gmail.com",
-      allowUsb: true, // Default to true so we can test save functionality
+      allowUsb: true,
       kioskMode: true,
       autoPrint: true,
-      adminEmail: "manager@billysayrlanes.com"
+      adminEmail: "manager@billysayrlanes.com",
+      paymentMethod: "qr",
+      qrPaymentUrl: "https://venmo.com/billysayrlanes"
     };
   });
 
@@ -72,16 +74,45 @@ export default function Admin() {
                 />
               </div>
               
-              <div className="flex items-center justify-between pt-2">
-                 <div className="space-y-0.5">
-                   <Label>Stripe Integration</Label>
-                   <p className="text-[10px] text-zinc-500">Connected to Account: acct_123...</p>
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-xs text-green-500 font-bold">ACTIVE</span>
-                 </div>
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSettings({...settings, paymentMethod: "nfc"})}
+                    className={`h-10 border-2 font-mono text-xs uppercase transition-all ${
+                      settings.paymentMethod === "nfc" 
+                        ? "bg-accent text-black border-accent" 
+                        : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
+                    }`}
+                  >
+                    NFC Tap
+                  </button>
+                  <button
+                    onClick={() => setSettings({...settings, paymentMethod: "qr"})}
+                    className={`h-10 border-2 font-mono text-xs uppercase transition-all ${
+                      settings.paymentMethod === "qr" 
+                        ? "bg-accent text-black border-accent" 
+                        : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
+                    }`}
+                  >
+                    QR Code
+                  </button>
+                </div>
               </div>
+
+              {settings.paymentMethod === "qr" && (
+                <div className="space-y-2">
+                  <Label htmlFor="qrUrl">QR Payment Link (Venmo, PayPal, etc.)</Label>
+                  <Input 
+                    id="qrUrl" 
+                    value={settings.qrPaymentUrl}
+                    onChange={(e) => setSettings({...settings, qrPaymentUrl: e.target.value})}
+                    placeholder="https://venmo.com/yourbusiness"
+                    className="bg-zinc-800 border-zinc-700 font-mono text-sm"
+                  />
+                  <p className="text-[10px] text-zinc-500">Customers scan to pay with their phone</p>
+                </div>
+              )}
             </div>
           </section>
 
