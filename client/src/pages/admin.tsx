@@ -12,21 +12,27 @@ export default function Admin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
-  // Mock Settings State
-  const [settings, setSettings] = useState({
-    pricePerStrip: "5.00",
-    emailSender: "booth@billysayrlanes.com",
-    allowUsb: false,
-    kioskMode: true,
-    autoPrint: true,
-    adminEmail: "manager@billysayrlanes.com"
+  // Load settings from localStorage
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem("booth_settings");
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return {
+      pricePerStrip: "5.00",
+      emailSender: "booth@billysayrlanes.com",
+      allowUsb: true, // Default to true so we can test save functionality
+      kioskMode: true,
+      autoPrint: true,
+      adminEmail: "manager@billysayrlanes.com"
+    };
   });
 
   const handleSave = () => {
-    // In a real app, this would save to backend
+    localStorage.setItem("booth_settings", JSON.stringify(settings));
     toast({
       title: "Settings Saved",
-      description: "Booth configuration has been updated.",
+      description: "Booth configuration has been saved locally.",
     });
   };
 

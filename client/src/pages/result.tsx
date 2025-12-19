@@ -10,16 +10,22 @@ export default function Result() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [email, setEmail] = useState("");
   const [isPrinting, setIsPrinting] = useState(true);
+  const [showSaveButton, setShowSaveButton] = useState(true);
 
   useEffect(() => {
     const storedPhotos = localStorage.getItem("booth_photos");
     const storedEmail = localStorage.getItem("user_email");
+    const settings = localStorage.getItem("booth_settings");
     
     if (storedPhotos) {
       setPhotos(JSON.parse(storedPhotos));
     }
     if (storedEmail) {
       setEmail(storedEmail);
+    }
+    if (settings) {
+      const parsed = JSON.parse(settings);
+      setShowSaveButton(parsed.allowUsb);
     }
     
     // Simulate printing time
@@ -160,10 +166,12 @@ export default function Result() {
                         <RotateCcw className="mr-2 w-4 h-4" />
                         NEW SESSION
                     </Button>
-                    <Button className="h-12 bg-white text-black hover:bg-zinc-200 font-display tracking-wider" onClick={handleDownload}>
-                        <Download className="mr-2 w-4 h-4" />
-                        SAVE STRIP
-                    </Button>
+                    {showSaveButton && (
+                      <Button className="h-12 bg-white text-black hover:bg-zinc-200 font-display tracking-wider" onClick={handleDownload}>
+                          <Download className="mr-2 w-4 h-4" />
+                          SAVE STRIP
+                      </Button>
+                    )}
                 </div>
             </motion.div>
         )}
