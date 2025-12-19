@@ -25,7 +25,7 @@ export default function Admin() {
       kioskMode: true,
       autoPrint: true,
       adminEmail: "manager@billysayrlanes.com",
-      paymentMethod: "qr",
+      enableQr: true,
       qrPaymentUrl: "https://venmo.com/billysayrlanes"
     };
   });
@@ -74,33 +74,18 @@ export default function Admin() {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label>Payment Method</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setSettings({...settings, paymentMethod: "nfc"})}
-                    className={`h-10 border-2 font-mono text-xs uppercase transition-all ${
-                      settings.paymentMethod === "nfc" 
-                        ? "bg-accent text-black border-accent" 
-                        : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
-                    }`}
-                  >
-                    NFC Tap
-                  </button>
-                  <button
-                    onClick={() => setSettings({...settings, paymentMethod: "qr"})}
-                    className={`h-10 border-2 font-mono text-xs uppercase transition-all ${
-                      settings.paymentMethod === "qr" 
-                        ? "bg-accent text-black border-accent" 
-                        : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
-                    }`}
-                  >
-                    QR Code
-                  </button>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Enable QR Code Payment</Label>
+                  <p className="text-[10px] text-zinc-500">Show QR option alongside card tap</p>
                 </div>
+                <Switch 
+                  checked={settings.enableQr}
+                  onCheckedChange={(checked) => setSettings({...settings, enableQr: checked})}
+                />
               </div>
 
-              {settings.paymentMethod === "qr" && (
+              {settings.enableQr && (
                 <div className="space-y-2">
                   <Label htmlFor="qrUrl">QR Payment Link (Venmo, PayPal, etc.)</Label>
                   <Input 

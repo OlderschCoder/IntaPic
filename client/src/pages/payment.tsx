@@ -14,9 +14,10 @@ export default function Payment() {
   const [isSwiping, setIsSwiping] = useState(false);
   const [photoType, setPhotoType] = useState<"bw" | "color">("bw");
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [paymentTab, setPaymentTab] = useState<"nfc" | "qr">("nfc");
   
   const [settings, setSettings] = useState({
-    paymentMethod: "qr",
+    enableQr: true,
     qrPaymentUrl: "https://venmo.com/billysayrlanes",
     pricePerStrip: "5.00"
   });
@@ -26,7 +27,7 @@ export default function Payment() {
     if (saved) {
       const parsed = JSON.parse(saved);
       setSettings({
-        paymentMethod: parsed.paymentMethod || "qr",
+        enableQr: parsed.enableQr !== false,
         qrPaymentUrl: parsed.qrPaymentUrl || "https://venmo.com/billysayrlanes",
         pricePerStrip: parsed.pricePerStrip || "5.00"
       });
@@ -101,38 +102,67 @@ export default function Payment() {
               </div>
             </div>
 
-            <div className="pt-4">
-              {settings.paymentMethod === "qr" ? (
+            <div className="pt-4 space-y-4">
+              {settings.enableQr && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPaymentTab("nfc")}
+                    className={`h-10 border-2 font-mono text-xs uppercase transition-all flex items-center justify-center gap-2 ${
+                      paymentTab === "nfc" 
+                        ? "bg-accent text-black border-accent" 
+                        : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
+                    }`}
+                    data-testid="tab-nfc"
+                  >
+                    <Nfc className="w-4 h-4" />
+                    Tap Card
+                  </button>
+                  <button
+                    onClick={() => setPaymentTab("qr")}
+                    className={`h-10 border-2 font-mono text-xs uppercase transition-all flex items-center justify-center gap-2 ${
+                      paymentTab === "qr" 
+                        ? "bg-accent text-black border-accent" 
+                        : "bg-transparent text-zinc-500 border-zinc-700 hover:border-zinc-500"
+                    }`}
+                    data-testid="tab-qr"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    Scan QR
+                  </button>
+                </div>
+              )}
+
+              {paymentTab === "qr" && settings.enableQr ? (
                 <div className="space-y-4">
                   <div className="bg-white p-4 rounded-lg mx-auto w-fit">
                     <QRCodeSVG 
                       value={settings.qrPaymentUrl} 
-                      size={160}
+                      size={140}
                       level="H"
                       data-testid="qr-payment-code"
                     />
                   </div>
-                  <div className="text-center space-y-2">
+                  <div className="text-center space-y-1">
                     <p className="font-mono text-xs text-zinc-400 uppercase tracking-widest">SCAN TO PAY ${settings.pricePerStrip}</p>
-                    <p className="font-mono text-[10px] text-zinc-600">Use your phone camera to scan</p>
+                    <p className="font-mono text-[10px] text-zinc-600">Use your phone camera</p>
                   </div>
                   
                   {paymentConfirmed ? (
                     <motion.div 
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="flex flex-col items-center gap-2 py-4"
+                      className="flex flex-col items-center gap-2 py-2"
                     >
-                      <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
-                        <Check className="w-8 h-8 text-white" />
+                      <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                        <Check className="w-6 h-6 text-white" />
                       </div>
-                      <span className="text-green-400 font-display text-lg uppercase">Payment Confirmed!</span>
+                      <span className="text-green-400 font-display uppercase">Payment Confirmed!</span>
                     </motion.div>
                   ) : (
                     <Button 
                       onClick={handleConfirmPayment}
                       disabled={!email}
-                      className="w-full bg-accent text-black hover:bg-accent/90 font-display text-lg tracking-widest h-14"
+                      className="w-full bg-accent text-black hover:bg-accent/90 font-display tracking-widest h-12"
                       data-testid="button-confirm-payment"
                     >
                       I'VE PAID - START PHOTOS
@@ -140,24 +170,24 @@ export default function Payment() {
                   )}
                 </div>
               ) : (
-                <div className="relative h-48 bg-zinc-800 rounded-lg border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center overflow-hidden group cursor-pointer" onClick={handleTap}>
+                <div className="relative h-40 bg-zinc-800 rounded-lg border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center overflow-hidden group cursor-pointer" onClick={handleTap}>
                   {isSwiping ? (
                     <motion.div 
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="text-accent font-display text-2xl uppercase flex flex-col items-center gap-2"
+                      className="text-accent font-display text-xl uppercase flex flex-col items-center gap-2"
                     >
-                      <div className="w-12 h-12 rounded-full border-4 border-accent border-t-transparent animate-spin" />
+                      <div className="w-10 h-10 rounded-full border-4 border-accent border-t-transparent animate-spin" />
                       Processing...
                     </motion.div>
                   ) : (
                     <>
                       <div className="relative">
-                        <Nfc className="w-20 h-20 text-zinc-500 mb-4 group-hover:text-white transition-colors animate-pulse" />
-                        <Smartphone className="w-12 h-12 text-zinc-600 absolute bottom-0 -right-4 bg-zinc-800 rounded-full p-1 border-2 border-zinc-800 group-hover:text-zinc-300 transition-colors" />
+                        <Nfc className="w-16 h-16 text-zinc-500 mb-2 group-hover:text-white transition-colors animate-pulse" />
+                        <Smartphone className="w-10 h-10 text-zinc-600 absolute bottom-0 -right-3 bg-zinc-800 rounded-full p-1 border-2 border-zinc-800 group-hover:text-zinc-300 transition-colors" />
                       </div>
                       <p className="font-mono text-xs text-zinc-400 group-hover:text-white transition-colors uppercase tracking-widest">TAP CARD OR PHONE HERE</p>
-                      <p className="font-mono text-[10px] text-zinc-600 mt-2">${settings.pricePerStrip} CHARGE</p>
+                      <p className="font-mono text-[10px] text-zinc-600 mt-1">${settings.pricePerStrip} CHARGE</p>
                     </>
                   )}
                   {!isSwiping && (
@@ -177,12 +207,12 @@ export default function Payment() {
            <div className="flex gap-2 items-center">
              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
              <span className="text-[10px] font-mono text-zinc-500">
-               {settings.paymentMethod === "qr" ? "QR PAYMENT" : "NFC READER ACTIVE"}
+               {paymentTab === "qr" ? "QR PAYMENT" : "NFC READER ACTIVE"}
              </span>
            </div>
            <div className="flex gap-2">
              <span className="text-[10px] font-mono text-zinc-600">
-               {settings.paymentMethod === "qr" ? "VENMO • PAYPAL • CASH APP" : "VISA • MC • AMEX • APPLE PAY"}
+               {paymentTab === "qr" ? "VENMO • PAYPAL • CASH APP" : "VISA • MC • AMEX • APPLE PAY"}
              </span>
            </div>
         </div>
