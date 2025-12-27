@@ -38,6 +38,20 @@ A vintage-style photo booth application for Billy's Ayr Lanes bowling alley. Run
 - **Endpoint:** POST /api/send-photos
 - **Features:** Auto-sends photo strip as JPG attachment after session completes
 
+## Flask Version
+A standalone Python Flask version is available in `/flask_app` for web deployment:
+- **Location:** `/flask_app`
+- **Run:** `python flask_app/run.py` or `gunicorn --bind 0.0.0.0:5000 wsgi:app`
+- **Static Files:** Built React frontend served from `flask_app/static/`
+- **API Endpoints:** Same as Express version (/api/send-photos, /api/send-sms, /api/health)
+- **Deploy:** Use Procfile with gunicorn for production
+
+To rebuild frontend for Flask:
+```bash
+npm run build
+cp -r dist/public/* flask_app/static/
+```
+
 ## User Preferences
 - Prefers frontend-only solutions when possible
 - Prioritizes simplicity and reliability for kiosk deployment
