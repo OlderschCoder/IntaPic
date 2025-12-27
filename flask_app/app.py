@@ -46,12 +46,11 @@ def send_photos():
         
         import base64
         base64_data = photo_strip.split(',')[1] if ',' in photo_strip else photo_strip
-        photo_buffer = base64.b64decode(base64_data)
         
         from datetime import datetime
         
         params = {
-            "from_": app.config['EMAIL_FROM'],
+            "from": app.config['EMAIL_FROM'],
             "to": [email],
             "subject": "Your Photo Strip from Billy's Ayr Lanes! 📸",
             "html": f"""
@@ -79,7 +78,7 @@ def send_photos():
             "attachments": [
                 {
                     "filename": f"photobooth-{session_id}.jpg",
-                    "content": list(photo_buffer),
+                    "content": base64_data,
                 }
             ]
         }
