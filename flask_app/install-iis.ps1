@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Installs and configures Billy's Photo Booth Flask application on IIS
+    Installs Billy's Photo Booth Flask application as an IIS sub-application
 .DESCRIPTION
     This script will:
     - Install Python 3.11 if not present
@@ -10,16 +10,22 @@
     - Set up a Python virtual environment
     - Install all required Python packages
     - Configure wfastcgi for IIS
-    - Create the IIS website and application pool
+    - Create the IIS application under Default Web Site at /FilmStrip
     - Generate the web.config file
 .NOTES
     Run this script as Administrator on your Windows Server with IIS installed
+.EXAMPLE
+    .\install-iis.ps1 -AppName "FilmStrip"
+    Installs at http://localhost/FilmStrip
+.EXAMPLE
+    .\install-iis.ps1 -AppName "PhotoBooth" -ParentSite "MyWebsite"
+    Installs at http://localhost/PhotoBooth under MyWebsite
 #>
 
 param(
     [string]$AppPath = "C:\inetpub\wwwroot\billysbooth",
-    [string]$SiteName = "BillysPhotoBooth",
-    [int]$Port = 80,
+    [string]$AppName = "FilmStrip",
+    [string]$ParentSite = "Default Web Site",
     [string]$ResendApiKey = "",
     [string]$TwilioAccountSid = "",
     [string]$TwilioAuthToken = "",
@@ -32,6 +38,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Billy's Photo Booth - IIS Installer" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "Installing as: /$AppName under $ParentSite" -ForegroundColor White
+Write-Host ""
 
 # Check if running as Administrator
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -41,7 +49,7 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
 }
 
 # Step 1: Check/Install Python
-Write-Host "[1/8] Checking Python installation..." -ForegroundColor Yellow
+Write-Host "[1/9] Checking Python installation..." -ForegroundColor Yellow
 
 $pythonPath = $null
 $pythonVersion = $null
@@ -78,7 +86,7 @@ try {
 }
 
 # Step 2: Enable IIS CGI Feature
-Write-Host "[2/8] Enabling IIS CGI feature..." -ForegroundColor Yellow
+Write-Host "[2/9] Enabling IIS CGI feature..." -ForegroundColor Yellow
 
 $cgiFeature = Get-WindowsOptionalFeature -Online -FeatureName IIS-CGI -ErrorAction SilentlyContinue
 if ($cgiFeature.State -ne "Enabled") {
@@ -89,7 +97,7 @@ if ($cgiFeature.State -ne "Enabled") {
 }
 
 # Step 3: Create application directory
-Write-Host "[3/8] Creating application directory..." -ForegroundColor Yellow
+Write-Host "[3/9] Creating application directory..." -ForegroundColor Yellow
 
 if (-not (Test-Path $AppPath)) {
     New-Item -ItemType Directory -Path $AppPath -Force | Out-Null
@@ -98,7 +106,7 @@ if (-not (Test-Path $AppPath)) {
     Write-Host "  Directory already exists: $AppPath" -ForegroundColor Green
 }
 
-# Copy application files (assumes script is run from flask_app directory)
+# Copy application files
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $flaskAppDir = Join-Path $AppPath "flask_app"
 
@@ -111,7 +119,7 @@ Copy-Item -Path "$scriptDir\*" -Destination $flaskAppDir -Recurse -Force -Exclud
 Write-Host "  Application files copied" -ForegroundColor Green
 
 # Step 4: Create virtual environment
-Write-Host "[4/8] Creating Python virtual environment..." -ForegroundColor Yellow
+Write-Host "[4/9] Creating Python virtual environment..." -ForegroundColor Yellow
 
 $venvPath = Join-Path $AppPath "venv"
 $pythonExe = Join-Path $venvPath "Scripts\python.exe"
@@ -125,7 +133,7 @@ if (-not (Test-Path $venvPath)) {
 }
 
 # Step 5: Install Python packages
-Write-Host "[5/8] Installing Python packages..." -ForegroundColor Yellow
+Write-Host "[5/9] Installing Python packages..." -ForegroundColor Yellow
 
 $requirementsPath = Join-Path $flaskAppDir "requirements.txt"
 & $pipExe install --upgrade pip | Out-Null
@@ -134,15 +142,9 @@ $requirementsPath = Join-Path $flaskAppDir "requirements.txt"
 Write-Host "  All packages installed" -ForegroundColor Green
 
 # Step 6: Configure wfastcgi
-Write-Host "[6/8] Configuring wfastcgi for IIS..." -ForegroundColor Yellow
+Write-Host "[6/9] Configuring wfastcgi for IIS..." -ForegroundColor Yellow
 
 $wfastcgiPath = Join-Path $venvPath "Lib\site-packages\wfastcgi.py"
-
-# Register FastCGI application
-$configPath = "$env:windir\System32\inetsrv\config\applicationHost.config"
-$fastCgiSection = @"
-            <application fullPath="$pythonExe" arguments="$wfastcgiPath" />
-"@
 
 try {
     & $pythonExe -m wfastcgi enable 2>&1 | Out-Null
@@ -151,10 +153,31 @@ try {
     Write-Host "  wfastcgi configuration (manual setup may be needed)" -ForegroundColor Yellow
 }
 
-# Step 7: Create web.config
-Write-Host "[7/8] Creating web.config..." -ForegroundColor Yellow
+# Step 7: Set system environment variables for secrets
+Write-Host "[7/9] Configuring environment variables..." -ForegroundColor Yellow
+
+if (-not [string]::IsNullOrEmpty($ResendApiKey)) {
+    [System.Environment]::SetEnvironmentVariable("RESEND_API_KEY", $ResendApiKey, "Machine")
+    Write-Host "  Set RESEND_API_KEY" -ForegroundColor Green
+}
+if (-not [string]::IsNullOrEmpty($TwilioAccountSid)) {
+    [System.Environment]::SetEnvironmentVariable("TWILIO_ACCOUNT_SID", $TwilioAccountSid, "Machine")
+    Write-Host "  Set TWILIO_ACCOUNT_SID" -ForegroundColor Green
+}
+if (-not [string]::IsNullOrEmpty($TwilioAuthToken)) {
+    [System.Environment]::SetEnvironmentVariable("TWILIO_AUTH_TOKEN", $TwilioAuthToken, "Machine")
+    Write-Host "  Set TWILIO_AUTH_TOKEN" -ForegroundColor Green
+}
+if (-not [string]::IsNullOrEmpty($TwilioPhoneNumber)) {
+    [System.Environment]::SetEnvironmentVariable("TWILIO_PHONE_NUMBER", $TwilioPhoneNumber, "Machine")
+    Write-Host "  Set TWILIO_PHONE_NUMBER" -ForegroundColor Green
+}
 
 $secretKey = [System.Guid]::NewGuid().ToString()
+[System.Environment]::SetEnvironmentVariable("FLASK_SECRET_KEY", $secretKey, "Machine")
+
+# Step 8: Create web.config for sub-application
+Write-Host "[8/9] Creating web.config..." -ForegroundColor Yellow
 
 $webConfig = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -162,14 +185,11 @@ $webConfig = @"
   <appSettings>
     <add key="WSGI_HANDLER" value="wsgi.app" />
     <add key="PYTHONPATH" value="$flaskAppDir" />
-    <add key="SECRET_KEY" value="$secretKey" />
-    <add key="RESEND_API_KEY" value="$ResendApiKey" />
-    <add key="TWILIO_ACCOUNT_SID" value="$TwilioAccountSid" />
-    <add key="TWILIO_AUTH_TOKEN" value="$TwilioAuthToken" />
-    <add key="TWILIO_PHONE_NUMBER" value="$TwilioPhoneNumber" />
+    <add key="SCRIPT_NAME" value="/$AppName" />
   </appSettings>
   <system.webServer>
     <handlers>
+      <remove name="Python FastCGI" />
       <add name="Python FastCGI"
            path="*"
            verb="*"
@@ -178,9 +198,14 @@ $webConfig = @"
            resourceType="Unspecified"
            requireAccess="Script" />
     </handlers>
-    <staticContent>
-      <mimeMap fileExtension=".json" mimeType="application/json" />
-    </staticContent>
+    <rewrite>
+      <rules>
+        <rule name="Static Files" stopProcessing="true">
+          <match url="^static/(.*)$" />
+          <action type="Rewrite" url="static/{R:1}" />
+        </rule>
+      </rules>
+    </rewrite>
   </system.webServer>
 </configuration>
 "@
@@ -189,61 +214,86 @@ $webConfigPath = Join-Path $flaskAppDir "web.config"
 $webConfig | Out-File -FilePath $webConfigPath -Encoding UTF8
 Write-Host "  web.config created" -ForegroundColor Green
 
-# Step 8: Create IIS Website
-Write-Host "[8/8] Creating IIS website..." -ForegroundColor Yellow
+# Step 9: Create IIS Application (sub-app under existing site)
+Write-Host "[9/9] Creating IIS application..." -ForegroundColor Yellow
 
 Import-Module WebAdministration -ErrorAction SilentlyContinue
 
 # Create Application Pool
-$appPoolName = "${SiteName}Pool"
+$appPoolName = "${AppName}Pool"
 if (-not (Test-Path "IIS:\AppPools\$appPoolName")) {
     New-WebAppPool -Name $appPoolName | Out-Null
     Set-ItemProperty "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
+    Set-ItemProperty "IIS:\AppPools\$appPoolName" -Name processModel.loadUserProfile -Value $true
     Write-Host "  Created application pool: $appPoolName" -ForegroundColor Green
 } else {
     Write-Host "  Application pool already exists: $appPoolName" -ForegroundColor Green
 }
 
-# Remove existing site if present
-if (Test-Path "IIS:\Sites\$SiteName") {
-    Remove-Website -Name $SiteName
-    Write-Host "  Removed existing site: $SiteName" -ForegroundColor Yellow
+# Check if parent site exists
+if (-not (Test-Path "IIS:\Sites\$ParentSite")) {
+    Write-Host "  ERROR: Parent site '$ParentSite' does not exist!" -ForegroundColor Red
+    Write-Host "  Available sites:" -ForegroundColor Yellow
+    Get-Website | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor Gray }
+    exit 1
 }
 
-# Create Website
-New-Website -Name $SiteName -PhysicalPath $flaskAppDir -ApplicationPool $appPoolName -Port $Port -Force | Out-Null
-Write-Host "  Created website: $SiteName on port $Port" -ForegroundColor Green
+# Remove existing application if present
+$appPath = "IIS:\Sites\$ParentSite\$AppName"
+if (Test-Path $appPath) {
+    Remove-WebApplication -Site $ParentSite -Name $AppName
+    Write-Host "  Removed existing application: /$AppName" -ForegroundColor Yellow
+}
+
+# Create Application under the parent site
+New-WebApplication -Site $ParentSite -Name $AppName -PhysicalPath $flaskAppDir -ApplicationPool $appPoolName | Out-Null
+Write-Host "  Created application: /$AppName under $ParentSite" -ForegroundColor Green
 
 # Set permissions
 $acl = Get-Acl $AppPath
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("IIS_IUSRS", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
 $acl.SetAccessRule($rule)
 Set-Acl $AppPath $acl
+
+$rule2 = New-Object System.Security.AccessControl.FileSystemAccessRule("IUSR", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+$acl.SetAccessRule($rule2)
+Set-Acl $AppPath $acl
 Write-Host "  Set folder permissions" -ForegroundColor Green
 
-# Restart IIS
+# Restart Application Pool
 Write-Host ""
-Write-Host "Restarting IIS..." -ForegroundColor Yellow
-iisreset /restart | Out-Null
+Write-Host "Restarting application pool..." -ForegroundColor Yellow
+Restart-WebAppPool -Name $appPoolName
+
+# Get parent site binding for URL
+$siteBindings = Get-WebBinding -Name $ParentSite
+$binding = $siteBindings | Select-Object -First 1
+$port = if ($binding.bindingInformation -match ':(\d+):') { $Matches[1] } else { "80" }
+$baseUrl = "http://localhost"
+if ($port -ne "80") { $baseUrl = "http://localhost:$port" }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "Installation Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Your photo booth is now available at: http://localhost:$Port" -ForegroundColor Cyan
+Write-Host "Your photo booth is now available at:" -ForegroundColor Cyan
+Write-Host "  $baseUrl/$AppName" -ForegroundColor White
 Write-Host ""
 Write-Host "Test the API health endpoint:" -ForegroundColor White
-Write-Host "  http://localhost:$Port/api/health" -ForegroundColor Gray
+Write-Host "  $baseUrl/$AppName/api/health" -ForegroundColor Gray
 Write-Host ""
 
 if ([string]::IsNullOrEmpty($ResendApiKey)) {
-    Write-Host "NOTE: Email not configured. Edit web.config to add RESEND_API_KEY" -ForegroundColor Yellow
+    Write-Host "NOTE: Email not configured." -ForegroundColor Yellow
+    Write-Host "  Set system environment variable: RESEND_API_KEY" -ForegroundColor Gray
 }
 if ([string]::IsNullOrEmpty($TwilioAccountSid)) {
-    Write-Host "NOTE: SMS not configured. Edit web.config to add Twilio credentials" -ForegroundColor Yellow
+    Write-Host "NOTE: SMS not configured." -ForegroundColor Yellow
+    Write-Host "  Set system environment variables: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER" -ForegroundColor Gray
 }
 
 Write-Host ""
-Write-Host "web.config location: $webConfigPath" -ForegroundColor Gray
+Write-Host "Application files: $flaskAppDir" -ForegroundColor Gray
+Write-Host "Virtual environment: $venvPath" -ForegroundColor Gray
 Write-Host ""

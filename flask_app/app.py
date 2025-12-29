@@ -1,13 +1,16 @@
 import os
 from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 import resend
 from twilio.rest import Client as TwilioClient
 
-app = Flask(__name__, static_folder='static', static_url_path='')
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.from_object(Config)
 CORS(app)
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 
 resend.api_key = app.config['RESEND_API_KEY']
 
