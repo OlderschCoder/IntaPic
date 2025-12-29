@@ -179,7 +179,7 @@ export default function Booth() {
       clearTimeout(timer);
       clearTimeout(startDelay);
     };
-  }, [photos.length, setLocation, cameraError]);
+  }, [photos.length, setLocation, cameraError, backgroundId]);
 
 
   return (

@@ -35,6 +35,11 @@ export default function Payment() {
         pricePerStrip: parsed.pricePerStrip || "5.00"
       });
     }
+    // Restore previously selected background
+    const savedBackground = localStorage.getItem("photo_background");
+    if (savedBackground) {
+      setSelectedBackground(savedBackground);
+    }
   }, []);
 
   const canProceed = email || phone;
