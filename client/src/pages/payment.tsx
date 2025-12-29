@@ -1,12 +1,13 @@
 import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion } from "framer-motion";
-import { Smartphone, Nfc, QrCode, Check } from "lucide-react";
+import { Smartphone, Nfc, QrCode, Check, Heart } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { QRCodeSVG } from "qrcode.react";
+import { romanticBackgrounds } from "@/lib/backgrounds";
 
 export default function Payment() {
   const [, setLocation] = useLocation();
@@ -16,6 +17,7 @@ export default function Payment() {
   const [photoType, setPhotoType] = useState<"bw" | "color">("bw");
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [paymentTab, setPaymentTab] = useState<"nfc" | "qr">("nfc");
+  const [selectedBackground, setSelectedBackground] = useState("none");
   
   const [settings, setSettings] = useState({
     enableQr: true,
@@ -42,6 +44,7 @@ export default function Payment() {
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
     localStorage.setItem("user_phone", phone);
+    localStorage.setItem("photo_background", selectedBackground);
     setIsSwiping(true);
     setTimeout(() => {
       setLocation("/booth");
@@ -54,6 +57,7 @@ export default function Payment() {
     localStorage.setItem("photo_type", photoType);
     localStorage.setItem("user_email", email);
     localStorage.setItem("user_phone", phone);
+    localStorage.setItem("photo_background", selectedBackground);
     setTimeout(() => {
       setLocation("/booth");
     }, 1500);
@@ -119,6 +123,43 @@ export default function Payment() {
                   Color
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-mono text-xs uppercase text-muted-foreground flex items-center gap-2">
+                <Heart className="w-3 h-3 text-pink-500" />
+                Background Theme
+              </Label>
+              <div className="grid grid-cols-5 gap-2">
+                {romanticBackgrounds.map((bg) => (
+                  <button
+                    key={bg.id}
+                    onClick={() => setSelectedBackground(bg.id)}
+                    className={`aspect-square rounded-lg border-2 transition-all relative overflow-hidden ${
+                      selectedBackground === bg.id 
+                        ? "border-accent ring-2 ring-accent ring-offset-2 ring-offset-zinc-900" 
+                        : "border-zinc-700 hover:border-zinc-500"
+                    }`}
+                    style={{ background: bg.gradient }}
+                    title={bg.name}
+                    data-testid={`bg-${bg.id}`}
+                  >
+                    {bg.id === "none" && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[8px] font-mono text-zinc-500">NONE</span>
+                      </div>
+                    )}
+                    {selectedBackground === bg.id && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <Check className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] font-mono text-zinc-600 text-center">
+                {romanticBackgrounds.find(bg => bg.id === selectedBackground)?.name || "No Background"}
+              </p>
             </div>
 
             <div className="pt-4 space-y-4">
