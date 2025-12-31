@@ -139,130 +139,129 @@ export default function Booth() {
       setTimeout(() => setIsFlashing(false), 200);
 
       const background = getBackgroundById(backgroundId);
+      const type = localStorage.getItem("photo_type") || "bw";
+      let photoData = "";
 
-      if (videoRef.current && !cameraError) {
-        // Get fresh segmentation mask
-        if (segmentationRef.current && background.id !== "none") {
-          await segmentationRef.current.send({ image: videoRef.current });
-        }
+      try {
+        if (videoRef.current && !cameraError && videoRef.current.videoWidth > 0) {
+          // Get fresh segmentation mask with timeout
+          if (segmentationRef.current && background.id !== "none") {
+            try {
+              await Promise.race([
+                segmentationRef.current.send({ image: videoRef.current }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 500))
+              ]);
+            } catch (e) {
+              console.log("Segmentation skipped:", e);
+            }
+          }
 
-        const canvas = document.createElement("canvas");
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-        const ctx = canvas.getContext("2d");
-        
-        if (ctx) {
-          const type = localStorage.getItem("photo_type") || "bw";
-
-          // If we have a background and segmentation mask, do proper compositing
-          if (background.id !== "none" && background.image && backgroundImageRef.current && lastMaskRef.current) {
-            // Draw background first
-            ctx.drawImage(backgroundImageRef.current, 0, 0, canvas.width, canvas.height);
-            
-            // Create a temporary canvas for the masked person
-            const personCanvas = document.createElement("canvas");
-            personCanvas.width = canvas.width;
-            personCanvas.height = canvas.height;
-            const personCtx = personCanvas.getContext("2d");
-            
-            if (personCtx) {
-              // Apply photo filter
-              if (type === "bw") {
-                personCtx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
-              } else {
-                personCtx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
-              }
+          const canvas = document.createElement("canvas");
+          canvas.width = videoRef.current.videoWidth || 640;
+          canvas.height = videoRef.current.videoHeight || 480;
+          const ctx = canvas.getContext("2d");
+          
+          if (ctx) {
+            // If we have a background and segmentation mask, do proper compositing
+            if (background.id !== "none" && background.image && backgroundImageRef.current && lastMaskRef.current) {
+              // Draw background first
+              ctx.drawImage(backgroundImageRef.current, 0, 0, canvas.width, canvas.height);
               
-              // Draw the video frame (flipped horizontally for selfie mode)
-              personCtx.save();
-              personCtx.scale(-1, 1);
-              personCtx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
-              personCtx.restore();
-              personCtx.filter = "none";
+              // Create a temporary canvas for the masked person
+              const personCanvas = document.createElement("canvas");
+              personCanvas.width = canvas.width;
+              personCanvas.height = canvas.height;
+              const personCtx = personCanvas.getContext("2d");
               
-              // Get the person image data
-              const personData = personCtx.getImageData(0, 0, canvas.width, canvas.height);
-              const mask = lastMaskRef.current;
-              const width = canvas.width;
-              const height = canvas.height;
-              
-              // Apply mask - make non-person pixels transparent
-              // Note: Mask is in camera-space, person image is flipped, so we mirror the mask x-coordinate
-              for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                  const personIdx = (y * width + x) * 4;
-                  // Mirror the x-coordinate to match the flipped video
-                  const maskX = width - 1 - x;
-                  const maskIdx = (y * width + maskX) * 4;
-                  const maskValue = mask.data[maskIdx]; // Red channel of mask
-                  
-                  if (maskValue < 128) {
-                    // Not a person, make transparent
-                    personData.data[personIdx + 3] = 0;
-                  } else {
-                    // Person, keep with some edge softening
-                    personData.data[personIdx + 3] = Math.min(255, maskValue * 2);
+              if (personCtx) {
+                // Apply photo filter
+                if (type === "bw") {
+                  personCtx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
+                } else {
+                  personCtx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
+                }
+                
+                // Draw the video frame (flipped horizontally for selfie mode)
+                personCtx.save();
+                personCtx.scale(-1, 1);
+                personCtx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
+                personCtx.restore();
+                personCtx.filter = "none";
+                
+                // Get the person image data
+                const personData = personCtx.getImageData(0, 0, canvas.width, canvas.height);
+                const mask = lastMaskRef.current;
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                // Apply mask - make non-person pixels transparent
+                // Note: Mask is in camera-space, person image is flipped, so we mirror the mask x-coordinate
+                for (let y = 0; y < height; y++) {
+                  for (let x = 0; x < width; x++) {
+                    const personIdx = (y * width + x) * 4;
+                    // Mirror the x-coordinate to match the flipped video
+                    const maskX = width - 1 - x;
+                    const maskIdx = (y * width + maskX) * 4;
+                    const maskValue = mask.data[maskIdx]; // Red channel of mask
+                    
+                    if (maskValue < 128) {
+                      personData.data[personIdx + 3] = 0;
+                    } else {
+                      personData.data[personIdx + 3] = Math.min(255, maskValue * 2);
+                    }
                   }
                 }
+                
+                personCtx.putImageData(personData, 0, 0);
+                ctx.drawImage(personCanvas, 0, 0);
+              }
+            } else {
+              // No background or no segmentation - just capture the video with filter
+              if (type === "bw") {
+                ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
+              } else {
+                ctx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
               }
               
-              // Put the masked person back
-              personCtx.putImageData(personData, 0, 0);
-              
-              // Draw the masked person on top of the background
-              ctx.drawImage(personCanvas, 0, 0);
-            }
-          } else {
-            // No background or no segmentation - just capture the video with filter
-            if (type === "bw") {
-              ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
-            } else {
-              ctx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
+              ctx.save();
+              ctx.scale(-1, 1);
+              ctx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
+              ctx.restore();
+              ctx.filter = "none";
             }
             
-            // Mirror the video for selfie mode
-            ctx.save();
-            ctx.scale(-1, 1);
-            ctx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
-            ctx.restore();
-            ctx.filter = "none";
+            photoData = canvas.toDataURL("image/jpeg", 0.92);
           }
-          
-          const photoData = canvas.toDataURL("image/jpeg", 0.92);
-          setPhotos(prev => [...prev, photoData]);
-        }
-      } else {
-        // Fallback / Simulation Mode
-        const canvas = document.createElement("canvas");
-        canvas.width = 640;
-        canvas.height = 480;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          if (background.id !== "none" && background.image) {
-            const bgImg = new Image();
-            bgImg.crossOrigin = "anonymous";
-            await new Promise<void>((resolve) => {
-              bgImg.onload = () => resolve();
-              bgImg.onerror = () => resolve();
-              bgImg.src = background.image!;
-            });
-            ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-          } else {
-            ctx.fillStyle = "#111";
-            ctx.fillRect(0, 0, 640, 480);
+        } else {
+          // Fallback / Simulation Mode
+          const canvas = document.createElement("canvas");
+          canvas.width = 640;
+          canvas.height = 480;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            if (background.id !== "none" && background.image && backgroundImageRef.current) {
+              ctx.drawImage(backgroundImageRef.current, 0, 0, canvas.width, canvas.height);
+            } else {
+              ctx.fillStyle = "#111";
+              ctx.fillRect(0, 0, 640, 480);
+            }
+            
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 32px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(`POSE ${photos.length + 1}`, 320, 240);
+            ctx.font = "14px monospace";
+            ctx.fillText("(Camera Simulation Mode)", 320, 280);
+            
+            photoData = canvas.toDataURL("image/jpeg");
           }
-          
-          ctx.fillStyle = "#fff";
-          ctx.font = "bold 32px sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(`POSE ${photos.length + 1}`, 320, 240);
-          ctx.font = "14px monospace";
-          ctx.fillText("(Camera Simulation Mode)", 320, 280);
-          
-          const photoData = canvas.toDataURL("image/jpeg");
-          setPhotos(prev => [...prev, photoData]);
         }
+      } catch (err) {
+        console.error("Photo capture error:", err);
       }
+
+      // Always add to photos to continue the sequence
+      setPhotos(prev => [...prev, photoData || "data:image/jpeg;base64,"]);
     };
 
     const runCountdown = (seconds: number) => {
