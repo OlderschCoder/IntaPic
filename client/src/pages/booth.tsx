@@ -194,20 +194,28 @@ export default function Booth() {
                 const width = canvas.width;
                 const height = canvas.height;
                 
-                // Apply mask - make non-person pixels transparent
-                // Note: Mask is in camera-space, person image is flipped, so we mirror the mask x-coordinate
+                // Apply mask with improved edge handling to eliminate halo
+                // Use higher thresholds: below 180 = transparent, above 220 = opaque, feather between
+                const LOW_THRESHOLD = 180;
+                const HIGH_THRESHOLD = 220;
+                
                 for (let y = 0; y < height; y++) {
                   for (let x = 0; x < width; x++) {
                     const personIdx = (y * width + x) * 4;
-                    // Mirror the x-coordinate to match the flipped video
                     const maskX = width - 1 - x;
                     const maskIdx = (y * width + maskX) * 4;
-                    const maskValue = mask.data[maskIdx]; // Red channel of mask
+                    const maskValue = mask.data[maskIdx];
                     
-                    if (maskValue < 128) {
+                    if (maskValue < LOW_THRESHOLD) {
+                      // Definitely background - fully transparent
                       personData.data[personIdx + 3] = 0;
+                    } else if (maskValue >= HIGH_THRESHOLD) {
+                      // Definitely person - fully opaque
+                      personData.data[personIdx + 3] = 255;
                     } else {
-                      personData.data[personIdx + 3] = Math.min(255, maskValue * 2);
+                      // Edge zone - smooth feathering
+                      const alpha = ((maskValue - LOW_THRESHOLD) / (HIGH_THRESHOLD - LOW_THRESHOLD)) * 255;
+                      personData.data[personIdx + 3] = Math.round(alpha);
                     }
                   }
                 }
