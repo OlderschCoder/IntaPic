@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion, AnimatePresence } from "framer-motion";
-import { getBackgroundById } from "@/lib/backgrounds";
+import { getBackgroundById, scenicBackgrounds } from "@/lib/backgrounds";
+import { SelfieSegmentation, Results } from "@mediapipe/selfie_segmentation";
 
 const PHOTOS_TO_TAKE = 4;
 const COUNTDOWN_SECONDS = 3;
@@ -10,13 +11,18 @@ const COUNTDOWN_SECONDS = 3;
 export default function Booth() {
   const [, setLocation] = useLocation();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [count, setCount] = useState<number | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const [backgroundId, setBackgroundId] = useState("none");
+  const [segmentationReady, setSegmentationReady] = useState(false);
+  const segmentationRef = useRef<SelfieSegmentation | null>(null);
+  const backgroundImageRef = useRef<HTMLImageElement | null>(null);
+  const lastMaskRef = useRef<ImageData | null>(null);
 
-  // Initialize Camera and load settings
+  // Initialize Camera, segmentation, and load settings
   useEffect(() => {
     let stream: MediaStream | null = null;
     
@@ -25,12 +31,63 @@ export default function Booth() {
     if (savedBackground) {
       setBackgroundId(savedBackground);
     }
+
+    // Preload background image
+    const bg = savedBackground ? getBackgroundById(savedBackground) : null;
+    if (bg && bg.image) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        backgroundImageRef.current = img;
+      };
+      img.src = bg.image;
+    }
+
+    // Initialize selfie segmentation
+    const selfieSegmentation = new SelfieSegmentation({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+      },
+    });
+
+    selfieSegmentation.setOptions({
+      modelSelection: 1,
+      selfieMode: true,
+    });
+
+    selfieSegmentation.onResults((results: Results) => {
+      if (canvasRef.current && results.segmentationMask) {
+        const ctx = canvasRef.current.getContext("2d");
+        if (ctx) {
+          // Store the mask for use during photo capture
+          ctx.drawImage(results.segmentationMask, 0, 0);
+          lastMaskRef.current = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+      }
+    });
+
+    segmentationRef.current = selfieSegmentation;
+    setSegmentationReady(true);
     
     const startCamera = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user"
+          } 
+        });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          
+          // Process frames for segmentation when background is selected
+          videoRef.current.onloadedmetadata = () => {
+            if (canvasRef.current && videoRef.current) {
+              canvasRef.current.width = videoRef.current.videoWidth;
+              canvasRef.current.height = videoRef.current.videoHeight;
+            }
+          };
         }
         setCameraError(false);
       } catch (err) {
@@ -41,9 +98,25 @@ export default function Booth() {
 
     startCamera();
 
+    // Periodic segmentation updates
+    let segInterval: NodeJS.Timeout | null = null;
+    if (savedBackground && savedBackground !== "none") {
+      segInterval = setInterval(async () => {
+        if (videoRef.current && segmentationRef.current && videoRef.current.readyState >= 2) {
+          await segmentationRef.current.send({ image: videoRef.current });
+        }
+      }, 100);
+    }
+
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
+      }
+      if (segInterval) {
+        clearInterval(segInterval);
+      }
+      if (segmentationRef.current) {
+        segmentationRef.current.close();
       }
     };
   }, []);
@@ -63,48 +136,100 @@ export default function Booth() {
 
     const takePhoto = async () => {
       setIsFlashing(true);
-      setTimeout(() => setIsFlashing(false), 200); // Flash duration
+      setTimeout(() => setIsFlashing(false), 200);
 
       const background = getBackgroundById(backgroundId);
 
       if (videoRef.current && !cameraError) {
+        // Get fresh segmentation mask
+        if (segmentationRef.current && background.id !== "none") {
+          await segmentationRef.current.send({ image: videoRef.current });
+        }
+
         const canvas = document.createElement("canvas");
         canvas.width = videoRef.current.videoWidth;
         canvas.height = videoRef.current.videoHeight;
         const ctx = canvas.getContext("2d");
+        
         if (ctx) {
-            // Draw background image first if selected
-            if (background.id !== "none" && background.image) {
-              const bgImg = new Image();
-              bgImg.crossOrigin = "anonymous";
-              await new Promise<void>((resolve) => {
-                bgImg.onload = () => resolve();
-                bgImg.onerror = () => resolve();
-                bgImg.src = background.image!;
-              });
-              ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-            }
+          const type = localStorage.getItem("photo_type") || "bw";
 
-            // Apply Photo Filter
-            const type = localStorage.getItem("photo_type") || "bw";
+          // If we have a background and segmentation mask, do proper compositing
+          if (background.id !== "none" && background.image && backgroundImageRef.current && lastMaskRef.current) {
+            // Draw background first
+            ctx.drawImage(backgroundImageRef.current, 0, 0, canvas.width, canvas.height);
             
+            // Create a temporary canvas for the masked person
+            const personCanvas = document.createElement("canvas");
+            personCanvas.width = canvas.width;
+            personCanvas.height = canvas.height;
+            const personCtx = personCanvas.getContext("2d");
+            
+            if (personCtx) {
+              // Apply photo filter
+              if (type === "bw") {
+                personCtx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
+              } else {
+                personCtx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
+              }
+              
+              // Draw the video frame (flipped horizontally for selfie mode)
+              personCtx.save();
+              personCtx.scale(-1, 1);
+              personCtx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
+              personCtx.restore();
+              personCtx.filter = "none";
+              
+              // Get the person image data
+              const personData = personCtx.getImageData(0, 0, canvas.width, canvas.height);
+              const mask = lastMaskRef.current;
+              const width = canvas.width;
+              const height = canvas.height;
+              
+              // Apply mask - make non-person pixels transparent
+              // Note: Mask is in camera-space, person image is flipped, so we mirror the mask x-coordinate
+              for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                  const personIdx = (y * width + x) * 4;
+                  // Mirror the x-coordinate to match the flipped video
+                  const maskX = width - 1 - x;
+                  const maskIdx = (y * width + maskX) * 4;
+                  const maskValue = mask.data[maskIdx]; // Red channel of mask
+                  
+                  if (maskValue < 128) {
+                    // Not a person, make transparent
+                    personData.data[personIdx + 3] = 0;
+                  } else {
+                    // Person, keep with some edge softening
+                    personData.data[personIdx + 3] = Math.min(255, maskValue * 2);
+                  }
+                }
+              }
+              
+              // Put the masked person back
+              personCtx.putImageData(personData, 0, 0);
+              
+              // Draw the masked person on top of the background
+              ctx.drawImage(personCanvas, 0, 0);
+            }
+          } else {
+            // No background or no segmentation - just capture the video with filter
             if (type === "bw") {
               ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
             } else {
-              // Vintage Color Look
               ctx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
             }
             
-            // Draw video with some transparency if background is set
-            if (background.id !== "none" && background.image) {
-              ctx.globalAlpha = 0.75;
-            }
-            ctx.drawImage(videoRef.current, 0, 0);
-            ctx.globalAlpha = 1.0;
+            // Mirror the video for selfie mode
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
+            ctx.restore();
             ctx.filter = "none";
-            
-            const photoData = canvas.toDataURL("image/jpeg");
-            setPhotos(prev => [...prev, photoData]);
+          }
+          
+          const photoData = canvas.toDataURL("image/jpeg", 0.92);
+          setPhotos(prev => [...prev, photoData]);
         }
       } else {
         // Fallback / Simulation Mode
@@ -113,31 +238,29 @@ export default function Booth() {
         canvas.height = 480;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-            // Draw background image for simulation too
-            if (background.id !== "none" && background.image) {
-              const bgImg = new Image();
-              bgImg.crossOrigin = "anonymous";
-              await new Promise<void>((resolve) => {
-                bgImg.onload = () => resolve();
-                bgImg.onerror = () => resolve();
-                bgImg.src = background.image!;
-              });
-              ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-            } else {
-              ctx.fillStyle = "#111";
-              ctx.fillRect(0, 0, 640, 480);
-            }
-            
-            ctx.fillStyle = "#333";
-            ctx.font = "40px monospace";
-            ctx.fillText(`POSE ${photos.length + 1}`, 240, 240);
-            // Add some random noise
-            for (let i = 0; i < 100; i++) {
-              ctx.fillStyle = Math.random() > 0.5 ? "#fff" : "#000";
-              ctx.fillRect(Math.random() * 640, Math.random() * 480, 2, 2);
-            }
-            const photoData = canvas.toDataURL("image/jpeg");
-            setPhotos(prev => [...prev, photoData]);
+          if (background.id !== "none" && background.image) {
+            const bgImg = new Image();
+            bgImg.crossOrigin = "anonymous";
+            await new Promise<void>((resolve) => {
+              bgImg.onload = () => resolve();
+              bgImg.onerror = () => resolve();
+              bgImg.src = background.image!;
+            });
+            ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+          } else {
+            ctx.fillStyle = "#111";
+            ctx.fillRect(0, 0, 640, 480);
+          }
+          
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 32px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(`POSE ${photos.length + 1}`, 320, 240);
+          ctx.font = "14px monospace";
+          ctx.fillText("(Camera Simulation Mode)", 320, 280);
+          
+          const photoData = canvas.toDataURL("image/jpeg");
+          setPhotos(prev => [...prev, photoData]);
         }
       }
     };
@@ -166,6 +289,9 @@ export default function Booth() {
     <BoothShell>
       <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center">
         
+        {/* Hidden canvas for segmentation processing */}
+        <canvas ref={canvasRef} className="hidden" />
+        
         {/* Camera Feed */}
         {!cameraError ? (
           <video 
@@ -178,6 +304,15 @@ export default function Booth() {
         ) : (
           <div className="absolute inset-0 w-full h-full bg-zinc-900 flex items-center justify-center">
              <div className="text-zinc-700 font-mono text-xl animate-pulse">CAMERA SIMULATION</div>
+          </div>
+        )}
+
+        {/* Background indicator */}
+        {backgroundId !== "none" && (
+          <div className="absolute top-4 right-4 z-30 bg-black/60 px-3 py-1 rounded-full">
+            <span className="text-[10px] font-mono text-accent uppercase">
+              {scenicBackgrounds.find(bg => bg.id === backgroundId)?.name}
+            </span>
           </div>
         )}
 
