@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { QRCodeSVG } from "qrcode.react";
-import { romanticBackgrounds } from "@/lib/backgrounds";
+import { scenicBackgrounds } from "@/lib/backgrounds";
 
 export default function Payment() {
   const [, setLocation] = useLocation();
@@ -135,27 +135,32 @@ export default function Payment() {
                 <Heart className="w-3 h-3 text-pink-500" />
                 Background Theme
               </Label>
-              <div className="grid grid-cols-5 gap-2">
-                {romanticBackgrounds.map((bg) => (
+              <div className="grid grid-cols-4 gap-2">
+                {scenicBackgrounds.map((bg) => (
                   <button
                     key={bg.id}
                     onClick={() => setSelectedBackground(bg.id)}
-                    className={`aspect-square rounded-lg border-2 transition-all relative overflow-hidden ${
+                    className={`aspect-[4/3] rounded-lg border-2 transition-all relative overflow-hidden ${
                       selectedBackground === bg.id 
                         ? "border-accent ring-2 ring-accent ring-offset-2 ring-offset-zinc-900" 
                         : "border-zinc-700 hover:border-zinc-500"
                     }`}
-                    style={{ background: bg.gradient }}
                     title={bg.name}
                     data-testid={`bg-${bg.id}`}
                   >
-                    {bg.id === "none" && (
-                      <div className="absolute inset-0 flex items-center justify-center">
+                    {bg.image ? (
+                      <img 
+                        src={bg.image} 
+                        alt={bg.name} 
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
                         <span className="text-[8px] font-mono text-zinc-500">NONE</span>
                       </div>
                     )}
                     {selectedBackground === bg.id && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                         <Check className="w-4 h-4 text-white" />
                       </div>
                     )}
@@ -163,7 +168,7 @@ export default function Payment() {
                 ))}
               </div>
               <p className="text-[10px] font-mono text-zinc-600 text-center">
-                {romanticBackgrounds.find(bg => bg.id === selectedBackground)?.name || "No Background"}
+                {scenicBackgrounds.find(bg => bg.id === selectedBackground)?.name || "No Background"}
               </p>
             </div>
 

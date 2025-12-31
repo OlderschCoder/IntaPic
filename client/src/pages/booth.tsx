@@ -61,7 +61,7 @@ export default function Booth() {
 
     let timer: NodeJS.Timeout;
 
-    const takePhoto = () => {
+    const takePhoto = async () => {
       setIsFlashing(true);
       setTimeout(() => setIsFlashing(false), 200); // Flash duration
 
@@ -73,31 +73,16 @@ export default function Booth() {
         canvas.height = videoRef.current.videoHeight;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-            // Draw background first if selected
-            if (background.id !== "none") {
-              // Create gradient from CSS string
-              const gradientMatch = background.gradient.match(/linear-gradient\((\d+)deg,\s*(.+)\)/);
-              if (gradientMatch) {
-                const angle = parseInt(gradientMatch[1]);
-                const colorStops = gradientMatch[2].split(/,\s*(?=[#a-z])/);
-                
-                // Calculate gradient coordinates based on angle
-                const rad = (angle - 90) * Math.PI / 180;
-                const x1 = canvas.width / 2 - Math.cos(rad) * canvas.width;
-                const y1 = canvas.height / 2 - Math.sin(rad) * canvas.height;
-                const x2 = canvas.width / 2 + Math.cos(rad) * canvas.width;
-                const y2 = canvas.height / 2 + Math.sin(rad) * canvas.height;
-                
-                const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
-                colorStops.forEach((stop) => {
-                  const parts = stop.trim().split(/\s+/);
-                  const color = parts[0];
-                  const position = parts[1] ? parseInt(parts[1]) / 100 : 0;
-                  gradient.addColorStop(position, color);
-                });
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-              }
+            // Draw background image first if selected
+            if (background.id !== "none" && background.image) {
+              const bgImg = new Image();
+              bgImg.crossOrigin = "anonymous";
+              await new Promise<void>((resolve) => {
+                bgImg.onload = () => resolve();
+                bgImg.onerror = () => resolve();
+                bgImg.src = background.image!;
+              });
+              ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
             }
 
             // Apply Photo Filter
@@ -111,8 +96,8 @@ export default function Booth() {
             }
             
             // Draw video with some transparency if background is set
-            if (background.id !== "none") {
-              ctx.globalAlpha = 0.85;
+            if (background.id !== "none" && background.image) {
+              ctx.globalAlpha = 0.75;
             }
             ctx.drawImage(videoRef.current, 0, 0);
             ctx.globalAlpha = 1.0;
@@ -128,21 +113,16 @@ export default function Booth() {
         canvas.height = 480;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-            // Draw background for simulation too
-            if (background.id !== "none") {
-              const gradientMatch = background.gradient.match(/linear-gradient\((\d+)deg,\s*(.+)\)/);
-              if (gradientMatch) {
-                const colorStops = gradientMatch[2].split(/,\s*(?=[#a-z])/);
-                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-                colorStops.forEach((stop) => {
-                  const parts = stop.trim().split(/\s+/);
-                  const color = parts[0];
-                  const position = parts[1] ? parseInt(parts[1]) / 100 : 0;
-                  gradient.addColorStop(position, color);
-                });
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-              }
+            // Draw background image for simulation too
+            if (background.id !== "none" && background.image) {
+              const bgImg = new Image();
+              bgImg.crossOrigin = "anonymous";
+              await new Promise<void>((resolve) => {
+                bgImg.onload = () => resolve();
+                bgImg.onerror = () => resolve();
+                bgImg.src = background.image!;
+              });
+              ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
             } else {
               ctx.fillStyle = "#111";
               ctx.fillRect(0, 0, 640, 480);
