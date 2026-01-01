@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { BoothShell } from "@/components/booth-shell";
 import { motion, AnimatePresence } from "framer-motion";
 import { getBackgroundById, scenicBackgrounds } from "@/lib/backgrounds";
-import { SelfieSegmentation, Results } from "@mediapipe/selfie_segmentation";
 
 const PHOTOS_TO_TAKE = 4;
 const COUNTDOWN_SECONDS = 3;
@@ -11,18 +10,14 @@ const COUNTDOWN_SECONDS = 3;
 export default function Booth() {
   const [, setLocation] = useLocation();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [count, setCount] = useState<number | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const [backgroundId, setBackgroundId] = useState("none");
-  const [segmentationReady, setSegmentationReady] = useState(false);
-  const segmentationRef = useRef<SelfieSegmentation | null>(null);
   const backgroundImageRef = useRef<HTMLImageElement | null>(null);
-  const lastMaskRef = useRef<ImageData | null>(null);
 
-  // Initialize Camera, segmentation, and load settings
+  // Initialize Camera and load settings
   useEffect(() => {
     let stream: MediaStream | null = null;
     
@@ -42,32 +37,6 @@ export default function Booth() {
       };
       img.src = bg.image;
     }
-
-    // Initialize selfie segmentation
-    const selfieSegmentation = new SelfieSegmentation({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
-      },
-    });
-
-    selfieSegmentation.setOptions({
-      modelSelection: 1,
-      selfieMode: true,
-    });
-
-    selfieSegmentation.onResults((results: Results) => {
-      if (canvasRef.current && results.segmentationMask) {
-        const ctx = canvasRef.current.getContext("2d");
-        if (ctx) {
-          // Store the mask for use during photo capture
-          ctx.drawImage(results.segmentationMask, 0, 0);
-          lastMaskRef.current = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
-        }
-      }
-    });
-
-    segmentationRef.current = selfieSegmentation;
-    setSegmentationReady(true);
     
     const startCamera = async () => {
       try {
@@ -80,14 +49,6 @@ export default function Booth() {
         });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          
-          // Process frames for segmentation when background is selected
-          videoRef.current.onloadedmetadata = () => {
-            if (canvasRef.current && videoRef.current) {
-              canvasRef.current.width = videoRef.current.videoWidth;
-              canvasRef.current.height = videoRef.current.videoHeight;
-            }
-          };
         }
         setCameraError(false);
       } catch (err) {
@@ -98,25 +59,9 @@ export default function Booth() {
 
     startCamera();
 
-    // Periodic segmentation updates
-    let segInterval: NodeJS.Timeout | null = null;
-    if (savedBackground && savedBackground !== "none") {
-      segInterval = setInterval(async () => {
-        if (videoRef.current && segmentationRef.current && videoRef.current.readyState >= 2) {
-          await segmentationRef.current.send({ image: videoRef.current });
-        }
-      }, 100);
-    }
-
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
-      }
-      if (segInterval) {
-        clearInterval(segInterval);
-      }
-      if (segmentationRef.current) {
-        segmentationRef.current.close();
       }
     };
   }, []);
@@ -144,98 +89,54 @@ export default function Booth() {
 
       try {
         if (videoRef.current && !cameraError && videoRef.current.videoWidth > 0) {
-          // Get fresh segmentation mask with timeout
-          if (segmentationRef.current && background.id !== "none") {
-            try {
-              await Promise.race([
-                segmentationRef.current.send({ image: videoRef.current }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 500))
-              ]);
-            } catch (e) {
-              console.log("Segmentation skipped:", e);
-            }
-          }
-
+          const videoWidth = videoRef.current.videoWidth || 640;
+          const videoHeight = videoRef.current.videoHeight || 480;
+          
+          // Create canvas with space for background frame
           const canvas = document.createElement("canvas");
-          canvas.width = videoRef.current.videoWidth || 640;
-          canvas.height = videoRef.current.videoHeight || 480;
+          const frameSize = background.id !== "none" && backgroundImageRef.current ? 40 : 0;
+          canvas.width = videoWidth + (frameSize * 2);
+          canvas.height = videoHeight + (frameSize * 2);
           const ctx = canvas.getContext("2d");
           
           if (ctx) {
-            // If we have a background and segmentation mask, do proper compositing
-            if (background.id !== "none" && background.image && backgroundImageRef.current && lastMaskRef.current) {
-              // Draw background first
+            // Draw scenic background as frame border if selected
+            if (background.id !== "none" && backgroundImageRef.current) {
               ctx.drawImage(backgroundImageRef.current, 0, 0, canvas.width, canvas.height);
-              
-              // Create a temporary canvas for the masked person
-              const personCanvas = document.createElement("canvas");
-              personCanvas.width = canvas.width;
-              personCanvas.height = canvas.height;
-              const personCtx = personCanvas.getContext("2d");
-              
-              if (personCtx) {
-                // Apply photo filter
-                if (type === "bw") {
-                  personCtx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
-                } else {
-                  personCtx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
-                }
-                
-                // Draw the video frame (flipped horizontally for selfie mode)
-                personCtx.save();
-                personCtx.scale(-1, 1);
-                personCtx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
-                personCtx.restore();
-                personCtx.filter = "none";
-                
-                // Get the person image data
-                const personData = personCtx.getImageData(0, 0, canvas.width, canvas.height);
-                const mask = lastMaskRef.current;
-                const width = canvas.width;
-                const height = canvas.height;
-                
-                // Apply mask with improved edge handling to eliminate halo
-                // Use higher thresholds: below 180 = transparent, above 220 = opaque, feather between
-                const LOW_THRESHOLD = 180;
-                const HIGH_THRESHOLD = 220;
-                
-                for (let y = 0; y < height; y++) {
-                  for (let x = 0; x < width; x++) {
-                    const personIdx = (y * width + x) * 4;
-                    const maskX = width - 1 - x;
-                    const maskIdx = (y * width + maskX) * 4;
-                    const maskValue = mask.data[maskIdx];
-                    
-                    if (maskValue < LOW_THRESHOLD) {
-                      // Definitely background - fully transparent
-                      personData.data[personIdx + 3] = 0;
-                    } else if (maskValue >= HIGH_THRESHOLD) {
-                      // Definitely person - fully opaque
-                      personData.data[personIdx + 3] = 255;
-                    } else {
-                      // Edge zone - smooth feathering
-                      const alpha = ((maskValue - LOW_THRESHOLD) / (HIGH_THRESHOLD - LOW_THRESHOLD)) * 255;
-                      personData.data[personIdx + 3] = Math.round(alpha);
-                    }
-                  }
-                }
-                
-                personCtx.putImageData(personData, 0, 0);
-                ctx.drawImage(personCanvas, 0, 0);
-              }
+            }
+            
+            // Apply photo filter
+            if (type === "bw") {
+              ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
             } else {
-              // No background or no segmentation - just capture the video with filter
-              if (type === "bw") {
-                ctx.filter = "grayscale(100%) contrast(120%) brightness(110%)";
-              } else {
-                ctx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
-              }
-              
-              ctx.save();
-              ctx.scale(-1, 1);
-              ctx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
-              ctx.restore();
-              ctx.filter = "none";
+              ctx.filter = "contrast(110%) brightness(105%) saturate(120%) sepia(20%)";
+            }
+            
+            // Draw video frame (mirrored for selfie mode) in center
+            ctx.save();
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+              videoRef.current, 
+              frameSize, 
+              frameSize, 
+              videoWidth, 
+              videoHeight
+            );
+            ctx.restore();
+            ctx.filter = "none";
+            
+            // Add decorative corner overlay if background is set
+            if (background.id !== "none" && backgroundImageRef.current) {
+              // Draw subtle vignette effect
+              const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, Math.min(videoWidth, videoHeight) * 0.3,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.7
+              );
+              gradient.addColorStop(0, 'rgba(0,0,0,0)');
+              gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
+              ctx.fillStyle = gradient;
+              ctx.fillRect(frameSize, frameSize, videoWidth, videoHeight);
             }
             
             photoData = canvas.toDataURL("image/jpeg", 0.92);
@@ -247,7 +148,7 @@ export default function Booth() {
           canvas.height = 480;
           const ctx = canvas.getContext("2d");
           if (ctx) {
-            if (background.id !== "none" && background.image && backgroundImageRef.current) {
+            if (background.id !== "none" && backgroundImageRef.current) {
               ctx.drawImage(backgroundImageRef.current, 0, 0, canvas.width, canvas.height);
             } else {
               ctx.fillStyle = "#111";
@@ -295,9 +196,6 @@ export default function Booth() {
   return (
     <BoothShell>
       <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center">
-        
-        {/* Hidden canvas for segmentation processing */}
-        <canvas ref={canvasRef} className="hidden" />
         
         {/* Camera Feed */}
         {!cameraError ? (
